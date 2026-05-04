@@ -47,9 +47,10 @@ EOF
     [[ -z "$line" ]] && continue
     repo="$line"
     slug="${repo/\//--}"
-    feed_url="${BASE_URL%/}/${slug}.atom"
+    feed_md="${BASE_URL%/}/${slug}.atom"
+    feed_html="${BASE_URL%/}/${slug}.html.atom"
     repo_url="https://github.com/${repo}/security/advisories"
-    echo "    <li><a class=\"feed\" href=\"${feed_url}\"><code>${repo}</code></a> &middot; <a href=\"${repo_url}\">advisories on GitHub</a></li>"
+    echo "    <li><code>${repo}</code> &middot; <a href=\"${feed_md}\">markdown feed</a> &middot; <a href=\"${feed_html}\">HTML feed</a> &middot; <a href=\"${repo_url}\">advisories on GitHub</a></li>"
   done < "$FEEDS"
 
   cat <<EOF

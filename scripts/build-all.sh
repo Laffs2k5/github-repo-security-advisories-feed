@@ -21,15 +21,23 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 
   repo="$line"
   slug="${repo/\//--}"
-  out="${SITE}/${slug}.atom"
-  feed_url="${BASE_URL%/}/${slug}.atom"
 
-  echo "::group::Building feed for ${repo}"
-  if ! "${here}/ghsa-to-atom.sh" "$repo" "$out" "$feed_url"; then
-    echo "::error::failed to build feed for ${repo}"
-    failed=$((failed + 1))
-  fi
-  echo "::endgroup::"
+  for fmt in markdown html; do
+    if [[ "$fmt" == "html" ]]; then
+      out="${SITE}/${slug}.html.atom"
+      feed_url="${BASE_URL%/}/${slug}.html.atom"
+    else
+      out="${SITE}/${slug}.atom"
+      feed_url="${BASE_URL%/}/${slug}.atom"
+    fi
+
+    echo "::group::Building feed for ${repo} (${fmt})"
+    if ! "${here}/ghsa-to-atom.sh" "$repo" "$out" "$feed_url" "$fmt"; then
+      echo "::error::failed to build ${fmt} feed for ${repo}"
+      failed=$((failed + 1))
+    fi
+    echo "::endgroup::"
+  done
 done < "$FEEDS"
 
 "${here}/build-index.sh" "$SITE" "$FEEDS" "$BASE_URL"

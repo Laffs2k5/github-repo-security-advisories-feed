@@ -2,15 +2,32 @@
 # ghsa-to-atom.sh — fetch a repo's published security advisories and emit an Atom feed.
 #
 # Usage:
-#   ghsa-to-atom.sh <owner/repo> <output-atom-path> <public-feed-url>
+#   ghsa-to-atom.sh <owner/repo> <output-atom-path> <public-feed-url> [format]
 #
-# Requires: gh (authenticated via GH_TOKEN/GITHUB_TOKEN), jq.
+# format: markdown (default) | html
+#   markdown: <content> contains the raw advisory body (GitHub markdown).
+#   html:     <content> contains pandoc-rendered HTML — pleasant in mail readers.
+#
+# Requires: gh (authenticated via GH_TOKEN/GITHUB_TOKEN), jq, and pandoc when
+# format=html.
 
 set -euo pipefail
 
-REPO="${1:?usage: $0 <owner/repo> <output-atom-path> <public-feed-url>}"
-OUT="${2:?usage: $0 <owner/repo> <output-atom-path> <public-feed-url>}"
-SELF_URL="${3:?usage: $0 <owner/repo> <output-atom-path> <public-feed-url>}"
+USAGE="usage: $0 <owner/repo> <output-atom-path> <public-feed-url> [markdown|html]"
+REPO="${1:?$USAGE}"
+OUT="${2:?$USAGE}"
+SELF_URL="${3:?$USAGE}"
+FORMAT="${4:-markdown}"
+
+case "$FORMAT" in
+  markdown|html) ;;
+  *) echo "invalid format: $FORMAT ($USAGE)" >&2; exit 2 ;;
+esac
+
+if [[ "$FORMAT" == "html" ]] && ! command -v pandoc >/dev/null; then
+  echo "pandoc is required for format=html but was not found on PATH" >&2
+  exit 1
+fi
 
 mkdir -p "$(dirname "$OUT")"
 
@@ -25,11 +42,39 @@ gh api --paginate \
   "repos/${REPO}/security-advisories?state=published&per_page=100" \
   > "$tmp_json"
 
-now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-feed_id="tag:github.com,2008:/repos/${REPO}/security-advisories"
-html_url="https://github.com/${REPO}/security/advisories"
+# For html format, replace each advisory's `description` markdown body with
+# pandoc-rendered HTML in place. The jq template below then xml-escapes that
+# HTML, which is exactly what <content type="html"> expects per Atom spec.
+if [[ "$FORMAT" == "html" ]]; then
+  augmented="$(mktemp)"
+  trap 'rm -f "$tmp_json" "$augmented"' EXIT
+  jq -c '.[]' "$tmp_json" | while IFS= read -r item; do
+    body=$(jq -r '.description // .summary // ""' <<<"$item")
+    if [[ -n "$body" ]]; then
+      rendered=$(printf '%s' "$body" | pandoc -f gfm -t html --wrap=none)
+    else
+      rendered=""
+    fi
+    jq -c --arg html "$rendered" '.description = $html' <<<"$item"
+  done | jq -s '.' > "$augmented"
+  mv "$augmented" "$tmp_json"
+fi
 
-entries="$(jq -r --arg repo "$REPO" '
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+html_url="https://github.com/${REPO}/security/advisories"
+# Each format gets a distinct feed id, entry id suffix, and title so subscribers
+# treat them as separate feeds.
+if [[ "$FORMAT" == "html" ]]; then
+  feed_id="tag:github.com,2008:/repos/${REPO}/security-advisories:html"
+  entry_id_suffix=":html"
+  feed_title="Security advisories (HTML) — ${REPO}"
+else
+  feed_id="tag:github.com,2008:/repos/${REPO}/security-advisories"
+  entry_id_suffix=""
+  feed_title="Security advisories — ${REPO}"
+fi
+
+entries="$(jq -r --arg repo "$REPO" --arg id_suffix "$entry_id_suffix" '
   def xmlesc:
     tostring
     | gsub("&"; "&amp;")
@@ -39,7 +84,7 @@ entries="$(jq -r --arg repo "$REPO" '
 
   sort_by(.published_at) | reverse | .[] |
   "  <entry>\n" +
-  "    <id>tag:github.com,2008:GHSA/" + .ghsa_id + "</id>\n" +
+  "    <id>tag:github.com,2008:GHSA/" + .ghsa_id + $id_suffix + "</id>\n" +
   "    <title type=\"html\">" +
         ((.severity // "unknown") | ascii_upcase) + " — " +
         ((.summary // "(no summary)") | xmlesc) +
@@ -69,7 +114,7 @@ printf '\xEF\xBB\xBF' > "$out_tmp"
   <id>${feed_id}</id>
   <link rel="self" type="application/atom+xml" href="${SELF_URL}"/>
   <link rel="alternate" type="text/html" href="${html_url}"/>
-  <title>Security advisories — ${REPO}</title>
+  <title>${feed_title}</title>
   <updated>${now}</updated>
   <author><name>github-repo-security-advisories-feed</name></author>
 EOF
