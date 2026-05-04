@@ -58,6 +58,10 @@ entries="$(jq -r --arg repo "$REPO" '
 ' "$tmp_json")"
 
 out_tmp="${OUT}.tmp.$$"
+# UTF-8 BOM: GitHub Pages serves .atom as application/atom+xml without a
+# charset, and some clients then default to Latin-1 and mojibake the bytes.
+# A BOM makes the encoding self-describing per RFC 3023, regardless of header.
+printf '\xEF\xBB\xBF' > "$out_tmp"
 {
   cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -71,7 +75,7 @@ out_tmp="${OUT}.tmp.$$"
 EOF
   printf '%s\n' "$entries"
   echo '</feed>'
-} > "$out_tmp"
+} >> "$out_tmp"
 
 mv -f "$out_tmp" "$OUT"
 echo "wrote $OUT ($(wc -c <"$OUT") bytes, $(jq 'length' "$tmp_json") advisories)"
