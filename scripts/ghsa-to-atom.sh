@@ -40,9 +40,11 @@ entries="$(jq -r --arg repo "$REPO" '
   sort_by(.published_at) | reverse | .[] |
   "  <entry>\n" +
   "    <id>tag:github.com,2008:GHSA/" + .ghsa_id + "</id>\n" +
-  "    <title type=\"html\">[" + .ghsa_id + "] " +
-        ((.severity // "unknown") | ascii_upcase) + ": " +
-        ((.summary // "(no summary)") | xmlesc) + "</title>\n" +
+  "    <title type=\"html\">" +
+        ((.severity // "unknown") | ascii_upcase) + " — " +
+        ((.summary // "(no summary)") | xmlesc) +
+        " (" + ([.cve_id, .ghsa_id] | map(select(. != null and . != "")) | join(", ") | xmlesc) + ")" +
+        "</title>\n" +
   "    <link rel=\"alternate\" type=\"text/html\" href=\"" + (.html_url | xmlesc) + "\"/>\n" +
   "    <published>" + .published_at + "</published>\n" +
   "    <updated>"   + (.updated_at // .published_at) + "</updated>\n" +
