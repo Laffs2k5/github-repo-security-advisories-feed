@@ -1,0 +1,3 @@
+# Repositories to monitor for security advisories.
+# One `owner/repo` per line. Lines starting with `#` and blank lines are ignored.
+opnsense/core
