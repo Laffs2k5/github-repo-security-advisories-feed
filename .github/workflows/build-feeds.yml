@@ -11,10 +11,8 @@ on:
       - "scripts/**"
       - ".github/workflows/build-feeds.yml"
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
+# Default to no permissions; grant the minimum each job needs below.
+permissions: {}
 
 concurrency:
   group: pages
@@ -23,34 +21,39 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
 
       - name: Set up pandoc
-        uses: pandoc/actions/setup@v1
+        uses: pandoc/actions/setup@86321b6dd4675f5014c611e05088e10d4939e09e  # v1
 
       - name: Configure Pages
         id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b  # v5
 
       - name: Build feeds
         run: |
           ./scripts/build-all.sh site feeds.txt "${{ steps.pages.outputs.base_url }}"
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa  # v3
         with:
           path: site
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e  # v4
